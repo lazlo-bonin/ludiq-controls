@@ -1,14 +1,8 @@
-Library/
-Temp/
-Obj/
-Build/
-ProjectSettings/
-
-Assets/*
-!Assets/Controls.meta
-!Assets/Controls/
-!Assets/Controls/*
-!Assets/Controls/**/*
+*
+!Controls.meta
+!Controls/
+!Controls/*
+!Controls/**/*
 
 *.csproj
 *.unityproj
