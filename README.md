@@ -4,13 +4,13 @@ A set of Unity editor controls for complex GUI scenarios.
 
 *(Documentation coming soon)*
 
-## Contributing
-
-I'll happily accept pull requests if you have improvements or fixes to suggest.
-
 ## Installation
 
 Import the `Controls` folder in your project and you're good to go!
+
+## Contributing
+
+I'll happily accept pull requests if you have improvements or fixes to suggest.
 
 ### To-do
 
