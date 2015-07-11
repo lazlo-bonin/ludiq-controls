@@ -62,7 +62,7 @@ namespace Ludiq.Controls
 
 				if (noneOption != null)
 				{
-					menu.AddItem(new GUIContent(noneOption.label), false, menuCallback, noneOption.value);
+					menu.AddItem(new GUIContent(noneOption.label), selectedOption == null || EqualityComparer<T>.Default.Equals(selectedOption.value, noneOption.value), menuCallback, noneOption.value);
 				}
 
 				if (noneOption != null && hasOptions)
@@ -74,7 +74,7 @@ namespace Ludiq.Controls
 				{
 					foreach (var option in options)
 					{
-						menu.AddItem(new GUIContent(option.label), false, menuCallback, option.value);
+						menu.AddItem(new GUIContent(option.label), selectedOption != null && EqualityComparer<T>.Default.Equals(selectedOption.value, option.value), menuCallback, option.value);
 					}
 				}
 

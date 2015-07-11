@@ -34,40 +34,6 @@
 			this.label = label;
 		}
 
-		// Override equality checks
-		// Two options of the same type are equal if they share 
-		// the same value, regardless of their labels.
-
-		public override bool Equals(object otherObject)
-		{
-			if (otherObject == null || !(otherObject is PopupOption<T>))
-			{
-				return false;
-			}
-
-			return Equals((PopupOption<T>)otherObject);
-		}
-
-		public bool Equals(PopupOption<T> other)
-		{
-			if (other == null)
-			{
-				return value == null;
-			}
-
-			if (value == null)
-			{
-				return other.value == null;
-			}
-
-			return value.Equals(other.value);
-		}
-
-		public override int GetHashCode()
-		{
-			return value.GetHashCode();
-		}
-
 		public static implicit operator T(PopupOption<T> option)
 		{
 			return option.value;
