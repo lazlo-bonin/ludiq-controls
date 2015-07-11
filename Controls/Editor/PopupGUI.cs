@@ -39,7 +39,7 @@ namespace Ludiq.Controls
 
 			if (hasMultipleDifferentValues)
 			{
-				label = "—";
+				label = "\u2014"; // Em Dash
 			}
 			else if (selectedOption == null)
 			{
@@ -64,7 +64,9 @@ namespace Ludiq.Controls
 
 				if (noneOption != null)
 				{
-					menu.AddItem(new GUIContent(noneOption.label), selectedOption == null || EqualityComparer<T>.Default.Equals(selectedOption.value, noneOption.value), menuCallback, noneOption.value);
+					bool on = !hasMultipleDifferentValues && (selectedOption == null || EqualityComparer<T>.Default.Equals(selectedOption.value, noneOption.value));
+
+					menu.AddItem(new GUIContent(noneOption.label), on, menuCallback, noneOption.value);
 				}
 
 				if (noneOption != null && hasOptions)
@@ -76,7 +78,9 @@ namespace Ludiq.Controls
 				{
 					foreach (var option in options)
 					{
-						menu.AddItem(new GUIContent(option.label), selectedOption != null && EqualityComparer<T>.Default.Equals(selectedOption.value, option.value), menuCallback, option.value);
+						bool on = !hasMultipleDifferentValues && (selectedOption != null && EqualityComparer<T>.Default.Equals(selectedOption.value, option.value));
+
+						menu.AddItem(new GUIContent(option.label), on, menuCallback, option.value);
 					}
 				}
 
@@ -88,6 +92,10 @@ namespace Ludiq.Controls
 			{
 				// Selected option isn't in range
 
+				if (hasMultipleDifferentValues)
+				{
+					// Do nothing
+				}
 				if (allowOuterOption)
 				{
 					callback(selectedOption.value);
