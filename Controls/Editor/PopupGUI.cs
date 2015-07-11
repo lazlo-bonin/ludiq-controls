@@ -21,6 +21,7 @@ namespace Ludiq.Controls
 		/// <param name="selectedOption">The selected option, or null for none.</param>
 		/// <param name="noneOption">The option for "no selection", or null for none.</param>
 		/// <param name="hasMultipleDifferentValues">Whether the content has multiple different values.</param>
+		/// <param name="allowOuterOption">Whether a selected option not in range should be allowed.</param>
 		public static void Render
 		(
 			Rect position,
@@ -28,7 +29,8 @@ namespace Ludiq.Controls
 			IEnumerable<PopupOption<T>> options,
 			PopupOption<T> selectedOption,
 			PopupOption<T> noneOption,
-			bool hasMultipleDifferentValues
+			bool hasMultipleDifferentValues,
+			bool allowOuterOption = true
 		)
 		{
 			bool hasOptions = options != null && options.Any();
@@ -86,7 +88,11 @@ namespace Ludiq.Controls
 			{
 				// Selected option isn't in range
 
-				if (noneOption != null)
+				if (allowOuterOption)
+				{
+					callback(selectedOption.value);
+				}
+				else if (noneOption != null)
 				{
 					callback(noneOption.value);
 				}
