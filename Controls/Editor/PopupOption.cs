@@ -1,4 +1,4 @@
-﻿namespace Ludiq.Controls
+﻿namespace Ludiq.Controls.Editor
 {
 	/// <summary>
 	/// An option in an editor popup field.

@@ -3,7 +3,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-namespace Ludiq.Controls
+namespace Ludiq.Controls.Editor
 {
 	/// <summary>
 	/// Utility class to display complex editor popups.

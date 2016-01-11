@@ -2,7 +2,7 @@
 using System.Linq;
 using UnityEditor;
 
-namespace Ludiq.Controls
+namespace Ludiq.Controls.Editor
 {
 	public static class Extensions
 	{
