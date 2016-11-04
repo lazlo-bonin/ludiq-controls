@@ -4,7 +4,7 @@
 	/// An option in an editor popup field.
 	/// </summary>
 	/// <typeparam name="T">The type of the backing value.</typeparam>
-	public class PopupOption<T>
+	public class DropdownOption<T>
 	{
 		/// <summary>
 		/// The backing value of the option.
@@ -19,7 +19,7 @@
 		/// <summary>
 		/// Initializes a new instance of the PopupOption class with the specified value.
 		/// </summary>
-		public PopupOption(T value)
+		public DropdownOption(T value)
 		{
 			this.value = value;
 			this.label = value.ToString();
@@ -28,13 +28,13 @@
 		/// <summary>
 		/// Initializes a new instance of the PopupOption class with the specified value and label.
 		/// </summary>
-		public PopupOption(T value, string label)
+		public DropdownOption(T value, string label)
 		{
 			this.value = value;
 			this.label = label;
 		}
 
-		public static implicit operator T(PopupOption<T> option)
+		public static implicit operator T(DropdownOption<T> option)
 		{
 			return option.value;
 		}
