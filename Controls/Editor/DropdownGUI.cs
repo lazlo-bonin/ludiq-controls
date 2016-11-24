@@ -44,7 +44,7 @@ namespace Ludiq.Controls.Editor
 				noneOption,
 				false
 			);
-        }
+		}
 
 		/// <summary>
 		/// Render an editor popup and return the newly selected value.
@@ -94,7 +94,6 @@ namespace Ludiq.Controls.Editor
 			{
 				GUI.changed = false; // HACK: Cancel button click
 				activeControlID = controlID;
-				activeValue = selectedOption.value;
 
 				DropdownSingle
 				(
@@ -110,15 +109,19 @@ namespace Ludiq.Controls.Editor
 					hasMultipleDifferentValues
 				);
 			}
-			else if (selectedOption != null && !allowOuterOption && !options.Any(o => EqualityComparer<T>.Default.Equals(o.value, selectedOption.value)))
-			{
-				// Selected option isn't in range
 
-				if (hasMultipleDifferentValues)
-				{
-					// Do nothing
-				}
-				else if (noneOption != null)
+			if (controlID == activeControlID && activeValueChanged) // Selected option changed
+			{
+				// TODO: Use EditorWindow.SendEvent like EditorGUI.PopupCallbackInfo does.
+				// Otherwise, there seems to be a 1-frame delay in update.
+				GUI.changed = true;
+				activeControlID = -1;
+				activeValueChanged = false;
+				return activeValue;
+			}
+			else if (selectedOption == null || (!allowOuterOption && !options.Any(o => EqualityComparer<T>.Default.Equals(o.value, selectedOption.value)))) // Selected option is null or outside of range
+			{
+				if (noneOption != null)
 				{
 					return noneOption.value;
 				}
@@ -126,14 +129,6 @@ namespace Ludiq.Controls.Editor
 				{
 					return default(T);
 				}
-			}
-
-			if (controlID == activeControlID && activeValueChanged)
-			{
-				GUI.changed = true;
-				activeControlID = -1;
-				activeValueChanged = false;
-				return activeValue;
 			}
 			else
 			{
@@ -234,7 +229,6 @@ namespace Ludiq.Controls.Editor
 			{
 				GUI.changed = false; // HACK: Cancel button click
 				activeControlID = controlID;
-				activeValues = selectedOptions.ToArray();
 
 				DropdownMultiple
 				(
