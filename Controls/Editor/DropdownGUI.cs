@@ -19,21 +19,15 @@ namespace Ludiq.Controls.Editor
 		public static IEnumerable<T> activeValues;
 		public static bool activeValueChanged = false;
 
-		/// <summary>
-		/// Render an editor popup and return the newly selected value.
-		/// </summary>
-		/// <param name="position">The position of the control.</param>
-		/// <param name="options">The list of available options.</param>
-		/// <param name="selectedValue">The selected value within the options.</param>
-		/// <param name="noneOption">The option for "no selection", or null for none.</param>
-		/// <param name="hasMultipleDifferentValues">Whether the content has multiple different values.</param>
 		public static T PopupSingle
 		(
 			Rect position,
 			IEnumerable<DropdownOption<T>> options,
 			T selectedValue,
 			DropdownOption<T> noneOption,
-			bool hasMultipleDifferentValues
+			bool hasMultipleDifferentValues,
+			GUIContent label = null,
+			GUIStyle style = null
 		)
 		{
 			return PopupSingle
@@ -42,19 +36,12 @@ namespace Ludiq.Controls.Editor
 				options,
 				options.FirstOrDefault(o => EqualityComparer<T>.Default.Equals(o.value, selectedValue)),
 				noneOption,
-				false
+				false,
+				label,
+				style
 			);
 		}
 
-		/// <summary>
-		/// Render an editor popup and return the newly selected value.
-		/// </summary>
-		/// <param name="position">The position of the control.</param>
-		/// <param name="options">The list of available options.</param>
-		/// <param name="selectedOption">The selected option, or null for none.</param>
-		/// <param name="noneOption">The option for "no selection", or null for none.</param>
-		/// <param name="hasMultipleDifferentValues">Whether the content has multiple different values.</param>
-		/// <param name="allowOuterOption">Whether a selected option not in range should be allowed.</param>
 		public static T PopupSingle
 		(
 			Rect position,
@@ -62,32 +49,44 @@ namespace Ludiq.Controls.Editor
 			DropdownOption<T> selectedOption,
 			DropdownOption<T> noneOption,
 			bool hasMultipleDifferentValues,
-			bool allowOuterOption = true
+			bool allowOuterOption = true,
+			GUIContent label = null,
+			GUIStyle style = null
 		)
 		{
-			string label;
+			if (label == null)
+			{
+				string text;
 
-			if (hasMultipleDifferentValues)
-			{
-				label = "\u2014"; // Em Dash
-			}
-			else if (selectedOption == null)
-			{
-				if (noneOption != null)
+				if (hasMultipleDifferentValues)
 				{
-					label = noneOption.label;
+					text = "\u2014"; // Em Dash
+				}
+				else if (selectedOption == null)
+				{
+					if (noneOption != null)
+					{
+						text = noneOption.label;
+					}
+					else
+					{
+						text = string.Empty;
+					}
 				}
 				else
 				{
-					label = string.Empty;
+					text = selectedOption.label;
 				}
-			}
-			else
-			{
-				label = selectedOption.label;
+
+				label = new GUIContent(text);
 			}
 
-			var buttonClicked = GUI.Button(position, label, EditorStyles.popup);
+			if (style == null)
+			{
+				style = EditorStyles.popup;
+			}
+
+			var buttonClicked = GUI.Button(position, label, style);
 			var controlID = GetLastControlID();
 
 			if (buttonClicked)
@@ -188,41 +187,53 @@ namespace Ludiq.Controls.Editor
 			IEnumerable<DropdownOption<T>> options,
 			IEnumerable<T> selectedOptions,
 			bool hasMultipleDifferentValues,
-			bool showNothingEverything = true
+			bool showNothingEverything = true,
+			GUIContent label = null,
+			GUIStyle style = null
 		)
 		{
-			string label;
-
 			selectedOptions = SanitizeMultipleOptions(options, selectedOptions);
 
-			if (hasMultipleDifferentValues)
+			if (label == null)
 			{
-				label = "\u2014"; // Em Dash
-			}
-			else
-			{
-				var selectedOptionsCount = selectedOptions.Count();
-				var optionsCount = options.Count();
+				string text;
 
-				if (selectedOptionsCount == 0)
+				if (hasMultipleDifferentValues)
 				{
-					label = "Nothing";
-				}
-				else if (selectedOptionsCount == 1)
-				{
-					label = options.First(o => EqualityComparer<T>.Default.Equals(o.value, selectedOptions.First())).label;
-				}
-				else if (selectedOptionsCount == optionsCount)
-				{
-					label = "Everything";
+					text = "\u2014"; // Em Dash
 				}
 				else
 				{
-					label = "(Mixed)";
+					var selectedOptionsCount = selectedOptions.Count();
+					var optionsCount = options.Count();
+
+					if (selectedOptionsCount == 0)
+					{
+						text = "Nothing";
+					}
+					else if (selectedOptionsCount == 1)
+					{
+						text = options.First(o => EqualityComparer<T>.Default.Equals(o.value, selectedOptions.First())).label;
+					}
+					else if (selectedOptionsCount == optionsCount)
+					{
+						text = "Everything";
+					}
+					else
+					{
+						text = "(Mixed)";
+					}
 				}
+
+				label = new GUIContent(text);
 			}
 
-			var buttonClicked = GUI.Button(position, label, EditorStyles.popup);
+			if (style == null)
+			{
+				style = EditorStyles.popup;
+			}
+
+			var buttonClicked = GUI.Button(position, label, style);
 			var controlID = GetLastControlID();
 
 			if (buttonClicked)
