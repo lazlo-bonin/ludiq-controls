@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,20 +14,50 @@ namespace Ludiq.Controls.Editor
 		public delegate void SingleCallback(T value);
 		public delegate void MultipleCallback(IEnumerable<T> value);
 
+		public static int activeControlID = -1;
+		public static T activeValue;
+		public static IEnumerable<T> activeValues;
+		public static bool activeValueChanged = false;
+
 		/// <summary>
-		/// Render an editor popup and return the newly selected option.
+		/// Render an editor popup and return the newly selected value.
 		/// </summary>
 		/// <param name="position">The position of the control.</param>
-		/// <param name="callback">The function called when a value is selected.</param>
+		/// <param name="options">The list of available options.</param>
+		/// <param name="selectedValue">The selected value within the options.</param>
+		/// <param name="noneOption">The option for "no selection", or null for none.</param>
+		/// <param name="hasMultipleDifferentValues">Whether the content has multiple different values.</param>
+		public static T PopupSingle
+		(
+			Rect position,
+			IEnumerable<DropdownOption<T>> options,
+			T selectedValue,
+			DropdownOption<T> noneOption,
+			bool hasMultipleDifferentValues
+		)
+		{
+			return PopupSingle
+			(
+				position,
+				options,
+				options.FirstOrDefault(o => EqualityComparer<T>.Default.Equals(o.value, selectedValue)),
+				noneOption,
+				false
+			);
+        }
+
+		/// <summary>
+		/// Render an editor popup and return the newly selected value.
+		/// </summary>
+		/// <param name="position">The position of the control.</param>
 		/// <param name="options">The list of available options.</param>
 		/// <param name="selectedOption">The selected option, or null for none.</param>
 		/// <param name="noneOption">The option for "no selection", or null for none.</param>
 		/// <param name="hasMultipleDifferentValues">Whether the content has multiple different values.</param>
 		/// <param name="allowOuterOption">Whether a selected option not in range should be allowed.</param>
-		public static void PopupSingle
+		public static T PopupSingle
 		(
 			Rect position,
-			SingleCallback callback,
 			IEnumerable<DropdownOption<T>> options,
 			DropdownOption<T> selectedOption,
 			DropdownOption<T> noneOption,
@@ -56,19 +87,30 @@ namespace Ludiq.Controls.Editor
 				label = selectedOption.label;
 			}
 
-			if (GUI.Button(position, label, EditorStyles.popup))
+			var buttonClicked = GUI.Button(position, label, EditorStyles.popup);
+			var controlID = GetLastControlID();
+
+			if (buttonClicked)
 			{
+				GUI.changed = false; // HACK: Cancel button click
+				activeControlID = controlID;
+				activeValue = selectedOption.value;
+
 				DropdownSingle
 				(
 					new Vector2(position.xMin, position.yMax),
-					callback,
+					(value) =>
+					{
+						activeValue = value;
+						activeValueChanged = true;
+					},
 					options,
 					selectedOption,
 					noneOption,
 					hasMultipleDifferentValues
 				);
 			}
-			else if (selectedOption != null && !options.Select(o => o.value).Contains(selectedOption.value) && !allowOuterOption)
+			else if (selectedOption != null && !allowOuterOption && !options.Any(o => EqualityComparer<T>.Default.Equals(o.value, selectedOption.value)))
 			{
 				// Selected option isn't in range
 
@@ -78,12 +120,24 @@ namespace Ludiq.Controls.Editor
 				}
 				else if (noneOption != null)
 				{
-					callback(noneOption.value);
+					return noneOption.value;
 				}
 				else
 				{
-					callback(default(T));
+					return default(T);
 				}
+			}
+
+			if (controlID == activeControlID && activeValueChanged)
+			{
+				GUI.changed = true;
+				activeControlID = -1;
+				activeValueChanged = false;
+				return activeValue;
+			}
+			else
+			{
+				return selectedOption.value;
 			}
 		}
 
@@ -100,7 +154,7 @@ namespace Ludiq.Controls.Editor
 			bool hasOptions = options != null && options.Any();
 
 			GenericMenu menu = new GenericMenu();
-			GenericMenu.MenuFunction2 menuCallback = (o) => { GUI.changed = true; callback((T)o); };
+			GenericMenu.MenuFunction2 menuCallback = (o) => { callback((T)o); };
 
 			if (noneOption != null)
 			{
@@ -133,13 +187,13 @@ namespace Ludiq.Controls.Editor
 			return selectedOptions.Where(so => options.Any(o => EqualityComparer<T>.Default.Equals(o.value, so)));
 		}
 
-		public static void PopupMultiple
+		public static IEnumerable<T> PopupMultiple
 		(
 			Rect position,
-			MultipleCallback callback,
 			IEnumerable<DropdownOption<T>> options,
 			IEnumerable<T> selectedOptions,
-			bool hasMultipleDifferentValues
+			bool hasMultipleDifferentValues,
+			bool showNothingEverything = true
 		)
 		{
 			string label;
@@ -173,16 +227,40 @@ namespace Ludiq.Controls.Editor
 				}
 			}
 
-			if (GUI.Button(position, label, EditorStyles.popup))
+			var buttonClicked = GUI.Button(position, label, EditorStyles.popup);
+			var controlID = GetLastControlID();
+
+			if (buttonClicked)
 			{
+				GUI.changed = false; // HACK: Cancel button click
+				activeControlID = controlID;
+				activeValues = selectedOptions.ToArray();
+
 				DropdownMultiple
 				(
 					new Vector2(position.xMin, position.yMax),
-					callback,
+					(values) =>
+					{
+						activeValues = values;
+						activeValueChanged = true;
+					},
 					options,
 					selectedOptions,
-					hasMultipleDifferentValues
+					hasMultipleDifferentValues,
+					showNothingEverything
 				);
+			}
+
+			if (controlID == activeControlID && activeValueChanged)
+			{
+				GUI.changed = true;
+				activeControlID = -1;
+				activeValueChanged = false;
+				return activeValues;
+			}
+			else
+			{
+				return selectedOptions;
 			}
 		}
 
@@ -192,7 +270,8 @@ namespace Ludiq.Controls.Editor
 			MultipleCallback callback,
 			IEnumerable<DropdownOption<T>> options,
 			IEnumerable<T> selectedOptions,
-			bool hasMultipleDifferentValues
+			bool hasMultipleDifferentValues,
+			bool showNothingEverything = true
 		)
 		{
 			selectedOptions = SanitizeMultipleOptions(options, selectedOptions);
@@ -202,8 +281,6 @@ namespace Ludiq.Controls.Editor
 			GenericMenu menu = new GenericMenu();
 			GenericMenu.MenuFunction2 switchCallback = (o) =>
 			{
-				GUI.changed = true;
-
 				var switchOption = (T)o;
 
 				var newSelectedOptions = selectedOptions.ToList();
@@ -222,23 +299,27 @@ namespace Ludiq.Controls.Editor
 
 			GenericMenu.MenuFunction nothingCallback = () =>
 			{
-				GUI.changed = true;
 				callback(Enumerable.Empty<T>());
 			};
 
 			GenericMenu.MenuFunction everythingCallback = () =>
 			{
-				GUI.changed = true;
-				callback(options.Select((o) => o.value));
+				callback(options.Select((o) => o.value).ToArray());
 			};
 
-			menu.AddItem(new GUIContent("Nothing"), !hasMultipleDifferentValues && !selectedOptions.Any(), nothingCallback);
-			menu.AddItem(new GUIContent("Everything"), !hasMultipleDifferentValues && selectedOptions.Count() == options.Count() && Enumerable.SequenceEqual(selectedOptions.OrderBy(t => t), options.Select(o => o.value).OrderBy(t => t)), everythingCallback);
+			if (showNothingEverything)
+			{
+				menu.AddItem(new GUIContent("Nothing"), !hasMultipleDifferentValues && !selectedOptions.Any(), nothingCallback);
+				menu.AddItem(new GUIContent("Everything"), !hasMultipleDifferentValues && selectedOptions.Count() == options.Count() && Enumerable.SequenceEqual(selectedOptions.OrderBy(t => t), options.Select(o => o.value).OrderBy(t => t)), everythingCallback);
+			}
+
+			if (showNothingEverything && hasOptions)
+			{
+				menu.AddSeparator(""); // Not in Unity default, but pretty
+			}
 
 			if (hasOptions)
 			{
-				menu.AddSeparator(""); // Not in Unity default, but pretty
-
 				foreach (var option in options)
 				{
 					bool on = !hasMultipleDifferentValues && (selectedOptions.Any(selectedOption => EqualityComparer<T>.Default.Equals(selectedOption, option.value)));
@@ -248,6 +329,11 @@ namespace Ludiq.Controls.Editor
 			}
 
 			menu.DropDown(new Rect(position, Vector2.zero));
+		}
+
+		private static int GetLastControlID()
+		{
+			return (int)typeof(EditorGUIUtility).GetField("s_LastControlID", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
 		}
 	}
 }
