@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
@@ -9,23 +10,154 @@ namespace Ludiq.Controls.Editor
 	/// <summary>
 	/// Utility class to display complex editor popups.
 	/// </summary>
-	public static class DropdownGUI<T>
+	public static partial class DropdownGUI<T>
 	{
+		// Note: a selected option outside the allowed options
+		// will stay selected, because the check isn't done at every frame
+		// for performance reasons. Therefore, if the options list changes, 
+		// it's up to the user to manually check if the option is in range.
+
+		/// <summary>
+		/// The unique control ID of the currently active popup.
+		/// </summary>
+		private static int activePopupControlID = -1;
+
+		/// <summary>
+		/// Whether the dropdown selection has changed.
+		/// </summary>
+		private static bool activeDropdownChanged = false;
+
+		/// <summary>
+		/// A method to build a list of dropdown options.
+		/// </summary>
+		public delegate IEnumerable<DropdownOption<T>> GetOptionsCallback();
+		
+		// Shorthand
+		private static bool Equal(T a, T b) 
+		{
+			return EqualityComparer<T>.Default.Equals(a, b);
+		}
+
+		// Get the internal last control ID via reflection
+		private static FieldInfo lastControlIDField;
+		private static int GetLastControlID()
+		{
+			if (lastControlIDField == null)
+			{
+				lastControlIDField = typeof(EditorGUIUtility).GetField("s_LastControlID", BindingFlags.Static | BindingFlags.NonPublic);
+			}
+
+			return (int)lastControlIDField.GetValue(null);
+		}
+
+		#region Single
+
+		/// <summary>
+		/// The selected value in the currently active single-option popup dropdown.
+		/// </summary>
+		private static T activeSingleDropdownValue;
+
+		/// <summary>
+		/// A method to call when a value has been selected in a single-option dropdown.
+		/// </summary>
 		public delegate void SingleCallback(T value);
-		public delegate void MultipleCallback(IEnumerable<T> value);
 
-		public static int activeControlID = -1;
-		public static T activeValue;
-		public static IEnumerable<T> activeValues;
-		public static bool activeValueChanged = false;
+		/// <summary>
+		/// Displays a single-option dropdown.
+		/// </summary>
+		public static void DropdownSingle
+		(
+			Vector2 position,
+			SingleCallback callback,
+			IEnumerable<DropdownOption<T>> options,
+			DropdownOption<T> selectedOption,
+			DropdownOption<T> noneOption
+		)
+		{
+			var hasMultipleDifferentValues = EditorGUI.showMixedValue;
 
+            ICollection<DropdownOption<T>> optionsCache = null;
+
+			bool hasOptions;
+
+			if (options != null)
+			{
+				optionsCache = options.CacheToCollection();
+				hasOptions = optionsCache.Count > 0;
+			}
+			else
+			{
+				hasOptions = false;
+			}
+
+			GenericMenu menu = new GenericMenu();
+			GenericMenu.MenuFunction2 menuCallback = (o) => { callback((T)o); };
+
+			if (noneOption != null)
+			{
+				bool on = !hasMultipleDifferentValues && (selectedOption == null || Equal(selectedOption.value, noneOption.value));
+
+				menu.AddItem(new GUIContent(noneOption.label), on, menuCallback, noneOption.value);
+			}
+
+			if (noneOption != null && hasOptions)
+			{
+				menu.AddSeparator(string.Empty);
+			}
+
+			if (hasOptions)
+			{
+				foreach (var option in optionsCache)
+				{
+					bool on = !hasMultipleDifferentValues && (selectedOption != null && Equal(selectedOption.value, option.value));
+
+					menu.AddItem(new GUIContent(option.label), on, menuCallback, option.value);
+				}
+			}
+
+			menu.DropDown(new Rect(position, Vector2.zero));
+		}
+
+		/// <summary>
+		/// Displays a single-option popup.
+		/// </summary>
 		public static T PopupSingle
 		(
 			Rect position,
 			IEnumerable<DropdownOption<T>> options,
 			T selectedValue,
 			DropdownOption<T> noneOption,
-			bool hasMultipleDifferentValues,
+			GUIContent label = null,
+			GUIStyle style = null
+		)
+		{
+			var selectedOption = options.FirstOrDefault(o => Equal(o.value, selectedValue));
+
+			if (selectedOption == null)
+			{
+				selectedOption = new DropdownOption<T>(selectedValue);
+			}
+
+			return PopupSingle
+			(
+				position,
+				options,
+				selectedOption,
+				noneOption,
+				label,
+				style
+			);
+		}
+
+		/// <summary>
+		/// Displays a single-option popup with a custom selected option label.
+		/// </summary>
+		public static T PopupSingle
+		(
+			Rect position,
+			IEnumerable<DropdownOption<T>> options,
+			DropdownOption<T> selectedOption,
+			DropdownOption<T> noneOption,
 			GUIContent label = null,
 			GUIStyle style = null
 		)
@@ -33,27 +165,58 @@ namespace Ludiq.Controls.Editor
 			return PopupSingle
 			(
 				position,
-				options,
-				options.FirstOrDefault(o => EqualityComparer<T>.Default.Equals(o.value, selectedValue)),
+				() => options,
+				selectedOption,
 				noneOption,
-				false,
 				label,
 				style
 			);
 		}
 
+		/// <summary>
+		/// Displays a single-option popup where the option list is only built when the dropdown is shown.
+		/// Useful when building the options list is very demanding (e.g. reflection).
+		/// </summary>
 		public static T PopupSingle
 		(
 			Rect position,
-			IEnumerable<DropdownOption<T>> options,
-			DropdownOption<T> selectedOption,
+			GetOptionsCallback getOptions,
+			T selectedValue,
 			DropdownOption<T> noneOption,
-			bool hasMultipleDifferentValues,
-			bool allowOuterOption = true,
 			GUIContent label = null,
 			GUIStyle style = null
 		)
 		{
+			var selectedOption = new DropdownOption<T>(selectedValue);
+
+			return PopupSingle
+			(
+				position,
+				getOptions,
+				selectedOption,
+				noneOption,
+				label,
+				style
+			);
+		}
+
+		/// <summary>
+		/// Displays a single-option popup where the option list is only built when the dropdown is shown.
+		/// Useful when building the options list is very demanding (e.g. reflection).
+		/// </summary>
+		public static T PopupSingle
+		(
+			Rect position,
+			GetOptionsCallback getOptions,
+			DropdownOption<T> selectedOption,
+			DropdownOption<T> noneOption,
+			GUIContent label = null,
+			GUIStyle style = null
+		)
+		{
+			var hasMultipleDifferentValues = EditorGUI.showMixedValue;
+
+			// Determine the label text if no override is specified
 			if (label == null)
 			{
 				string text;
@@ -81,44 +244,49 @@ namespace Ludiq.Controls.Editor
 				label = new GUIContent(text);
 			}
 
+			// Apply the popup style is no override is specified
 			if (style == null)
 			{
 				style = EditorStyles.popup;
 			}
 
-			var buttonClicked = GUI.Button(position, label, style);
-			var controlID = GetLastControlID();
+			// Render a button and get its control ID
+			var popupClicked = GUI.Button(position, label, style);
+			var popupControlID = GetLastControlID();
 
-			if (buttonClicked)
+			if (popupClicked)
 			{
-				GUI.changed = false; // HACK: Cancel button click
-				activeControlID = controlID;
+				// Cancel button click
+				GUI.changed = false; 
 
+				// Assign the active control ID
+				activePopupControlID = popupControlID;
+
+				// Display the dropdown
 				DropdownSingle
 				(
 					new Vector2(position.xMin, position.yMax),
 					(value) =>
 					{
-						activeValue = value;
-						activeValueChanged = true;
+						activeSingleDropdownValue = value;
+						activeDropdownChanged = true;
 					},
-					options,
+					getOptions(),
 					selectedOption,
-					noneOption,
-					hasMultipleDifferentValues
+					noneOption
 				);
 			}
 
-			if (controlID == activeControlID && activeValueChanged) // Selected option changed
+			if (popupControlID == activePopupControlID && activeDropdownChanged) // Selected option changed
 			{
 				// TODO: Use EditorWindow.SendEvent like EditorGUI.PopupCallbackInfo does.
 				// Otherwise, there seems to be a 1-frame delay in update.
 				GUI.changed = true;
-				activeControlID = -1;
-				activeValueChanged = false;
-				return activeValue;
+				activePopupControlID = -1;
+				activeDropdownChanged = false;
+				return activeSingleDropdownValue;
 			}
-			else if (selectedOption == null || (!allowOuterOption && !options.Any(o => EqualityComparer<T>.Default.Equals(o.value, selectedOption.value)))) // Selected option is null or outside of range
+			else if (selectedOption == null) // Selected option is null
 			{
 				if (noneOption != null)
 				{
@@ -135,67 +303,178 @@ namespace Ludiq.Controls.Editor
 			}
 		}
 
-		public static void DropdownSingle
+		#endregion
+
+		#region Multiple
+		
+		/// <summary>
+		/// The selected values in the currently active multiple-options popup dropdown.
+		/// </summary>
+		private static HashSet<T> activeMultipleDropdownValues;
+
+		/// <summary>
+		/// A method to call when values have changed in a multiple-options dropdown.
+		/// </summary>
+		public delegate void MultipleCallback(HashSet<T> value);
+
+		/// <summary>
+		/// Displays a multiple-options dropdown.
+		/// </summary>
+		public static void DropdownMultiple
 		(
 			Vector2 position,
-			SingleCallback callback,
+			MultipleCallback callback,
 			IEnumerable<DropdownOption<T>> options,
-			DropdownOption<T> selectedOption,
-			DropdownOption<T> noneOption,
-			bool hasMultipleDifferentValues
+			HashSet<T> selectedOptions,
+			bool showNothingEverything = true
 		)
 		{
-			bool hasOptions = options != null && options.Any();
+			var hasMultipleDifferentValues = EditorGUI.showMixedValue;
+
+			ICollection<DropdownOption<T>> optionsCache = null;
+
+			bool hasOptions;
+
+			if (options != null)
+			{
+				optionsCache = options.CacheToCollection();
+				hasOptions = optionsCache.Count > 0;
+			}
+			else
+			{
+				hasOptions = false;
+			}
+
+			var selectedOptionsCopy = selectedOptions.ToHashSet();
+
+			// Remove options outside range
+			selectedOptionsCopy.RemoveWhere(so => !optionsCache.Any(o => Equal(o.value, so)));
 
 			GenericMenu menu = new GenericMenu();
-			GenericMenu.MenuFunction2 menuCallback = (o) => { callback((T)o); };
 
-			if (noneOption != null)
+			// The callback when a normal option has been selected
+			GenericMenu.MenuFunction2 switchCallback = (o) =>
 			{
-				bool on = !hasMultipleDifferentValues && (selectedOption == null || EqualityComparer<T>.Default.Equals(selectedOption.value, noneOption.value));
-
-				menu.AddItem(new GUIContent(noneOption.label), on, menuCallback, noneOption.value);
-			}
-
-			if (noneOption != null && hasOptions)
-			{
-				menu.AddSeparator("");
-			}
-
-			if (hasOptions)
-			{
-				foreach (var option in options)
+				var switchOption = (T)o;
+				
+				if (selectedOptionsCopy.Contains(switchOption))
 				{
-					bool on = !hasMultipleDifferentValues && (selectedOption != null && EqualityComparer<T>.Default.Equals(selectedOption.value, option.value));
+					selectedOptionsCopy.Remove(switchOption);
+				}
+				else
+				{
+					selectedOptionsCopy.Add(switchOption);
+				}
 
-					menu.AddItem(new GUIContent(option.label), on, menuCallback, option.value);
+				callback(selectedOptionsCopy); // Force copy
+			};
+
+			// The callback when the special "Nothing" option has been selected
+			GenericMenu.MenuFunction nothingCallback = () =>
+			{
+				callback(new HashSet<T>());
+			};
+
+			// The callback when the special "Everything" option has been selected
+			GenericMenu.MenuFunction everythingCallback = () =>
+			{
+				callback(optionsCache.Select((o) => o.value).ToHashSet());
+			};
+
+			// Add the special "Nothing" / "Everything" options
+			if (showNothingEverything)
+			{
+				menu.AddItem
+				(
+					new GUIContent("Nothing"), 
+					!hasMultipleDifferentValues && selectedOptionsCopy.Count == 0, 
+					nothingCallback
+				);
+
+				if (hasOptions)
+				{
+					menu.AddItem
+					(
+						new GUIContent("Everything"),
+						!hasMultipleDifferentValues && selectedOptionsCopy.Count == optionsCache.Count && Enumerable.SequenceEqual(selectedOptionsCopy.OrderBy(t => t), optionsCache.Select(o => o.value).OrderBy(t => t)),
+						everythingCallback
+					);
 				}
 			}
 
+			// Add a separator (not in Unity default, but pretty)
+			if (showNothingEverything && hasOptions)
+			{
+				menu.AddSeparator(string.Empty);
+			}
+
+			// Add the normal options
+			if (hasOptions)
+			{
+				foreach (var option in optionsCache)
+				{
+					menu.AddItem
+					(
+						new GUIContent(option.label),
+						!hasMultipleDifferentValues && (selectedOptionsCopy.Any(selectedOption => Equal(selectedOption, option.value))), 
+						switchCallback, 
+						option.value
+					);
+				}
+			}
+
+			// Show the dropdown
 			menu.DropDown(new Rect(position, Vector2.zero));
 		}
 
-		private static IEnumerable<T> SanitizeMultipleOptions(IEnumerable<DropdownOption<T>> options, IEnumerable<T> selectedOptions)
-		{
-			// Remove outer options
-			return selectedOptions.Where(so => options.Any(o => EqualityComparer<T>.Default.Equals(o.value, so)));
-		}
-
-		public static IEnumerable<T> PopupMultiple
+		/// <summary>
+		/// Displays a multiple-options popup.
+		/// </summary>
+		public static HashSet<T> PopupMultiple
 		(
 			Rect position,
 			IEnumerable<DropdownOption<T>> options,
-			IEnumerable<T> selectedOptions,
-			bool hasMultipleDifferentValues,
+			HashSet<T> selectedOptions,
 			bool showNothingEverything = true,
 			GUIContent label = null,
 			GUIStyle style = null
 		)
 		{
-			selectedOptions = SanitizeMultipleOptions(options, selectedOptions);
+			return PopupMultiple
+			(
+				position,
+				() => options,
+				selectedOptions,
+				showNothingEverything,
+				label,
+				style
+			);
+		}
 
+		/// <summary>
+		/// Displays a multiple-options popup where the option list is only built when the dropdown is shown.
+		/// Useful when building the options list is very demanding (e.g. reflection).
+		/// Note that not specifying a label will force the options list to be built at every repaint.
+		/// </summary>
+		public static HashSet<T> PopupMultiple
+		(
+			Rect position,
+			GetOptionsCallback getOptions,
+			HashSet<T> selectedOptions,
+			bool showNothingEverything = true,
+			GUIContent label = null,
+			GUIStyle style = null
+		)
+		{
+			var hasMultipleDifferentValues = EditorGUI.showMixedValue;
+
+			IEnumerable<DropdownOption<T>> options = null;
+
+			// Determine the label text if no override is specified
 			if (label == null)
 			{
+				options = getOptions();
+				
 				string text;
 
 				if (hasMultipleDifferentValues)
@@ -213,7 +492,7 @@ namespace Ludiq.Controls.Editor
 					}
 					else if (selectedOptionsCount == 1)
 					{
-						text = options.First(o => EqualityComparer<T>.Default.Equals(o.value, selectedOptions.First())).label;
+						text = options.First(o => Equal(o.value, selectedOptions.First())).label;
 					}
 					else if (selectedOptionsCount == optionsCount)
 					{
@@ -228,117 +507,52 @@ namespace Ludiq.Controls.Editor
 				label = new GUIContent(text);
 			}
 
+			// Apply the popup style if no override is specified
 			if (style == null)
 			{
 				style = EditorStyles.popup;
 			}
 
-			var buttonClicked = GUI.Button(position, label, style);
-			var controlID = GetLastControlID();
+			// Render a button and get its control ID
+			var popupClicked = GUI.Button(position, label, style);
+			var popupControlID = GetLastControlID();
 
-			if (buttonClicked)
+			if (popupClicked)
 			{
-				GUI.changed = false; // HACK: Cancel button click
-				activeControlID = controlID;
+				// Cancel button click
+				GUI.changed = false;
 
+				// Assign the currently active control ID
+				activePopupControlID = popupControlID;
+				
+				// Display the dropdown
 				DropdownMultiple
 				(
 					new Vector2(position.xMin, position.yMax),
 					(values) =>
 					{
-						activeValues = values;
-						activeValueChanged = true;
+						activeMultipleDropdownValues = values;
+						activeDropdownChanged = true;
 					},
-					options,
+					options != null ? options : getOptions(),
 					selectedOptions,
-					hasMultipleDifferentValues,
 					showNothingEverything
 				);
 			}
 
-			if (controlID == activeControlID && activeValueChanged)
+			if (popupControlID == activePopupControlID && activeDropdownChanged)
 			{
 				GUI.changed = true;
-				activeControlID = -1;
-				activeValueChanged = false;
-				return activeValues;
+				activePopupControlID = -1;
+				activeDropdownChanged = false;
+				return activeMultipleDropdownValues;
 			}
 			else
 			{
-				return selectedOptions;
+				return selectedOptions.ToHashSet();
 			}
 		}
-
-		public static void DropdownMultiple
-		(
-			Vector2 position,
-			MultipleCallback callback,
-			IEnumerable<DropdownOption<T>> options,
-			IEnumerable<T> selectedOptions,
-			bool hasMultipleDifferentValues,
-			bool showNothingEverything = true
-		)
-		{
-			selectedOptions = SanitizeMultipleOptions(options, selectedOptions);
-
-			bool hasOptions = options != null && options.Any();
-
-			GenericMenu menu = new GenericMenu();
-			GenericMenu.MenuFunction2 switchCallback = (o) =>
-			{
-				var switchOption = (T)o;
-
-				var newSelectedOptions = selectedOptions.ToList();
-
-				if (newSelectedOptions.Contains(switchOption))
-				{
-					newSelectedOptions.Remove(switchOption);
-				}
-				else
-				{
-					newSelectedOptions.Add(switchOption);
-				}
-
-				callback(newSelectedOptions);
-			};
-
-			GenericMenu.MenuFunction nothingCallback = () =>
-			{
-				callback(Enumerable.Empty<T>());
-			};
-
-			GenericMenu.MenuFunction everythingCallback = () =>
-			{
-				callback(options.Select((o) => o.value).ToArray());
-			};
-
-			if (showNothingEverything)
-			{
-				menu.AddItem(new GUIContent("Nothing"), !hasMultipleDifferentValues && !selectedOptions.Any(), nothingCallback);
-				menu.AddItem(new GUIContent("Everything"), !hasMultipleDifferentValues && selectedOptions.Count() == options.Count() && Enumerable.SequenceEqual(selectedOptions.OrderBy(t => t), options.Select(o => o.value).OrderBy(t => t)), everythingCallback);
-			}
-
-			if (showNothingEverything && hasOptions)
-			{
-				menu.AddSeparator(""); // Not in Unity default, but pretty
-			}
-
-			if (hasOptions)
-			{
-				foreach (var option in options)
-				{
-					bool on = !hasMultipleDifferentValues && (selectedOptions.Any(selectedOption => EqualityComparer<T>.Default.Equals(selectedOption, option.value)));
-
-					menu.AddItem(new GUIContent(option.label), on, switchCallback, option.value);
-				}
-			}
-
-			menu.DropDown(new Rect(position, Vector2.zero));
-		}
-
-		private static int GetLastControlID()
-		{
-			return (int)typeof(EditorGUIUtility).GetField("s_LastControlID", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-		}
+		
+		#endregion
 	}
 }

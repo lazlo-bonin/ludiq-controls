@@ -21,5 +21,22 @@ namespace Ludiq.Controls.Editor
 				return new[] { property };
 			}
 		}
+
+		public static HashSet<T> ToHashSet<T>(this IEnumerable<T> enumerable)
+		{
+			return new HashSet<T>(enumerable);
+		}
+
+		public static ICollection<T> CacheToCollection<T>(this IEnumerable<T> enumerable)
+		{
+			if (enumerable is ICollection<T>)
+			{
+				return (ICollection<T>)enumerable;
+			}
+			else
+			{
+				return enumerable.ToList();
+			}
+		}
 	}
 }
